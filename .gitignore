@@ -1,16 +1,15 @@
-# Go build
-main
+# Binaries
+app
 *.exe
 *.out
-/app
-
-# Short URL storage
-urls.json
 
 # Logs
 *.log
 
-# IDEs and editors
+# Editor files
 .vscode/
 .idea/
 *.swp
+
+# Data
+urls.json

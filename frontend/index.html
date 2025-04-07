@@ -5,50 +5,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>URL Shortener</title>
   <style>
-    body { font-family: sans-serif; padding: 2rem; }
-    input, button { padding: 0.5rem; font-size: 1rem; }
-    #result { margin-top: 1rem; color: green; }
+    body {
+      font-family: sans-serif;
+      padding: 2rem;
+      text-align: center;
+    }
+    input, button {
+      padding: 10px;
+      font-size: 16px;
+      margin: 10px;
+    }
   </style>
 </head>
 <body>
-  <h1>Simple URL Shortener</h1>
-  <form id="shorten-form">
-    <input type="text" id="url" placeholder="Enter your URL" required />
-    <button type="submit">Shorten</button>
-  </form>
-
-  <div id="result"></div>
+  <h1>Go URL Shortener</h1>
+  <input type="text" id="urlInput" placeholder="Enter URL..." />
+  <button onclick="shorten()">Shorten</button>
+  <p id="result"></p>
 
   <script>
-    window.addEventListener("DOMContentLoaded", () => {
-      const form = document.getElementById("shorten-form");
-      const resultDiv = document.getElementById("result");
-
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const url = document.getElementById("url").value;
-
-        try {
-          const response = await fetch("/shorten", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ url }),
-          });
-
-          const data = await response.json();
-          if (data.short_url) {
-            resultDiv.innerHTML = `Short URL: <a href="${data.short_url}" target="_blank">${data.short_url}</a>`;
-          } else {
-            resultDiv.innerText = "Failed to shorten URL.";
-          }
-        } catch (err) {
-          resultDiv.innerText = "Something went wrong!";
-          console.error(err);
-        }
+    async function shorten() {
+      const url = document.getElementById('urlInput').value;
+      const res = await fetch('/shorten', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
       });
-    });
+      const data = await res.json();
+      document.getElementById('result').innerText = "Short URL: " + data.short_url;
+    }
   </script>
 </body>
 </html>

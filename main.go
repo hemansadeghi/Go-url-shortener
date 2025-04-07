@@ -8,12 +8,31 @@ import (
 	"net/http"
 	"os"
 	"time"
+	"io/ioutil"
 )
 
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+type URLMap map[string]string
 
-func generateShortLink(n int) string {
+const storageFile = "urls.json"
+
+func loadURLMap() URLMap {
+	data, err := ioutil.ReadFile(storageFile)
+	if err != nil {
+		return make(URLMap)
+	}
+	var urls URLMap
+	json.Unmarshal(data, &urls)
+	return urls
+}
+
+func saveURLMap(urls URLMap) {
+	data, _ := json.MarshalIndent(urls, "", "  ")
+	ioutil.WriteFile(storageFile, data, 0644)
+}
+
+func generateShortCode(n int) string {
 	rand.Seed(time.Now().UnixNano())
+	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 	b := make([]rune, n)
 	for i := range b {
 		b[i] = letters[rand.Intn(len(letters))]
@@ -21,63 +40,28 @@ func generateShortLink(n int) string {
 	return string(b)
 }
 
-func ensureJSONExists(filename string) {
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		f, err := os.Create(filename)
-		if err != nil {
-			log.Fatalf("Error creating file: %v", err)
-		}
-		f.Write([]byte("{}"))
-		f.Close()
-	}
-}
-
-func loadURLs() map[string]string {
-	data, err := os.ReadFile("urls.json")
-	if err != nil {
-		return make(map[string]string)
-	}
-	var urls map[string]string
-	json.Unmarshal(data, &urls)
-	return urls
-}
-
-func saveURLs(urls map[string]string) {
-	data, _ := json.MarshalIndent(urls, "", "  ")
-	os.WriteFile("urls.json", data, 0644)
-}
-
 func shortenHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
 		return
 	}
 
-	type Request struct {
+	var body struct {
 		URL string `json:"url"`
 	}
 
-	type Response struct {
-		ShortURL string `json:"short_url"`
-	}
-
-	var req Request
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil || req.URL == "" {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	err := json.NewDecoder(r.Body).Decode(&body)
+	if err != nil || body.URL == "" {
+		http.Error(w, "Invalid body", http.StatusBadRequest)
 		return
 	}
 
-	shortCode := generateShortLink(6)
+	urls := loadURLMap()
+	code := generateShortCode(6)
+	urls[code] = body.URL
+	saveURLMap(urls)
 
-	urls := loadURLs()
-	urls[shortCode] = req.URL
-	saveURLs(urls)
-
-	resp := Response{
-		ShortURL: fmt.Sprintf("https://%s/%s", r.Host, shortCode),
-	}
-
+	resp := map[string]string{"short_url": fmt.Sprintf("https://%s/%s", r.Host, code)}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -85,30 +69,27 @@ func shortenHandler(w http.ResponseWriter, r *http.Request) {
 func redirectHandler(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Path[1:]
 	if code == "" {
+		http.ServeFile(w, r, "./frontend/index.html")
+		return
+	}
+	urls := loadURLMap()
+	longURL, ok := urls[code]
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
-
-	urls := loadURLs()
-	if original, ok := urls[code]; ok {
-		http.Redirect(w, r, original, http.StatusFound)
-		return
-	}
-
-	http.NotFound(w, r)
+	http.Redirect(w, r, longURL, http.StatusFound)
 }
 
 func main() {
-	ensureJSONExists("urls.json")
-
+	http.HandleFunc("/", redirectHandler)
 	http.HandleFunc("/shorten", shortenHandler)
-	http.HandleFunc("/", redirectHandler) // این مسیر مهمه
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	fmt.Println("Server running at http://localhost:" + port)
+	fmt.Println("Server running on port " + port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
