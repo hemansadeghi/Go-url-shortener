@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Go URL Shortener</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 2rem; background: #f9f9f9; }
+    input, button { padding: 0.5rem; margin: 0.5rem; width: 300px; }
+  </style>
+</head>
+<body>
+  <h1>Shorten Your URL</h1>
+  <input type="text" id="urlInput" placeholder="Enter long URL" />
+  <button onclick="shorten()">Shorten</button>
+  <p id="result"></p>
+
+  <script>
+    async function shorten() {
+      const url = document.getElementById("urlInput").value;
+      const res = await fetch("/shorten", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      const data = await res.json();
+      document.getElementById("result").textContent = "Short URL: " + data.short;
+    }
+  </script>
+</body>
+</html>
