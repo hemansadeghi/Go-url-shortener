@@ -2,6 +2,10 @@
 main
 *.exe
 *.out
+/app
+
+# Short URL storage
+urls.json
 
 # Logs
 *.log
