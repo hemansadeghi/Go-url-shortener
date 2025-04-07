@@ -2,37 +2,117 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>URL Shortener</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Go URL Shortener</title>
   <style>
     body {
-      font-family: sans-serif;
-      padding: 2rem;
-      text-align: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
     }
-    input, button {
+
+    h1 {
+      margin-bottom: 20px;
+    }
+
+    .neumorphic {
+      background: #e0e0e0;
+      border-radius: 12px;
+      box-shadow: 6px 6px 16px #bebebe, -6px -6px 16px #ffffff;
+      padding: 20px;
+      display: flex;
+      gap: 10px;
+    }
+
+    input {
+      border: none;
+      outline: none;
       padding: 10px;
-      font-size: 16px;
-      margin: 10px;
+      border-radius: 8px;
+      flex: 1;
+      background: #e0e0e0;
+      box-shadow: inset 4px 4px 8px #bebebe, inset -4px -4px 8px #ffffff;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      background: #e0e0e0;
+      box-shadow: 6px 6px 12px #bebebe, -6px -6px 12px #ffffff;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      transform: scale(1.05);
+    }
+
+    #result {
+      margin-top: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #shortUrl {
+      text-decoration: none;
+      color: #007bff;
+      font-weight: bold;
+    }
+
+    #copyBtn {
+      cursor: pointer;
+      background: #e0e0e0;
+      box-shadow: 4px 4px 10px #bebebe, -4px -4px 10px #ffffff;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.9em;
+      user-select: none;
     }
   </style>
 </head>
 <body>
   <h1>Go URL Shortener</h1>
-  <input type="text" id="urlInput" placeholder="Enter URL..." />
-  <button onclick="shorten()">Shorten</button>
-  <p id="result"></p>
+  <div class="neumorphic">
+    <input type="text" id="urlInput" placeholder="https://example.com" />
+    <button onclick="shorten()">Shorten</button>
+  </div>
+
+  <div id="result" style="display:none;">
+    Short URL:
+    <a id="shortUrl" href="#" target="_blank"></a>
+    <div id="copyBtn" onclick="copyToClipboard()">Copy</div>
+  </div>
 
   <script>
-    async function shorten() {
+    function shorten() {
       const url = document.getElementById('urlInput').value;
-      const res = await fetch('/shorten', {
+      fetch('/shorten', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
+        body: JSON.stringify({ url: url })
+      })
+      .then(res => res.json())
+      .then(data => {
+        const link = data.short_url;
+        document.getElementById('shortUrl').href = link;
+        document.getElementById('shortUrl').innerText = link;
+        document.getElementById('result').style.display = 'flex';
       });
-      const data = await res.json();
-      document.getElementById('result').innerText = "Short URL: " + data.short_url;
+    }
+
+    function copyToClipboard() {
+      const text = document.getElementById('shortUrl').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        document.getElementById('copyBtn').innerText = "Copied!";
+        setTimeout(() => document.getElementById('copyBtn').innerText = "Copy", 1500);
+      });
     }
   </script>
 </body>
