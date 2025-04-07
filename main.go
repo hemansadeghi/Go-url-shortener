@@ -21,6 +21,32 @@ func generateShortLink(n int) string {
 	return string(b)
 }
 
+func ensureJSONExists(filename string) {
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		f, err := os.Create(filename)
+		if err != nil {
+			log.Fatalf("Error creating file: %v", err)
+		}
+		f.Write([]byte("{}"))
+		f.Close()
+	}
+}
+
+func loadURLs() map[string]string {
+	data, err := os.ReadFile("urls.json")
+	if err != nil {
+		return make(map[string]string)
+	}
+	var urls map[string]string
+	json.Unmarshal(data, &urls)
+	return urls
+}
+
+func saveURLs(urls map[string]string) {
+	data, _ := json.MarshalIndent(urls, "", "  ")
+	os.WriteFile("urls.json", data, 0644)
+}
+
 func shortenHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -44,6 +70,10 @@ func shortenHandler(w http.ResponseWriter, r *http.Request) {
 
 	shortCode := generateShortLink(6)
 
+	urls := loadURLs()
+	urls[shortCode] = req.URL
+	saveURLs(urls)
+
 	resp := Response{
 		ShortURL: fmt.Sprintf("https://%s/%s", r.Host, shortCode),
 	}
@@ -52,12 +82,27 @@ func shortenHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-func main() {
-	// Serve static frontend files (like index.html)
-	http.Handle("/", http.FileServer(http.Dir("./frontend")))
+func redirectHandler(w http.ResponseWriter, r *http.Request) {
+	code := r.URL.Path[1:]
+	if code == "" {
+		http.NotFound(w, r)
+		return
+	}
 
-	// API route
+	urls := loadURLs()
+	if original, ok := urls[code]; ok {
+		http.Redirect(w, r, original, http.StatusFound)
+		return
+	}
+
+	http.NotFound(w, r)
+}
+
+func main() {
+	ensureJSONExists("urls.json")
+
 	http.HandleFunc("/shorten", shortenHandler)
+	http.HandleFunc("/", redirectHandler) // این مسیر مهمه
 
 	port := os.Getenv("PORT")
 	if port == "" {
