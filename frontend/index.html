@@ -16,16 +16,25 @@
   <p id="result"></p>
 
   <script>
-    async function shorten() {
-      const url = document.getElementById("urlInput").value;
-      const res = await fetch("/shorten", {
+    const form = document.getElementById("shorten-form");
+    const resultDiv = document.getElementById("result");
+  
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const url = document.getElementById("url").value;
+  
+      const response = await fetch("/shorten", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url })
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url }),
       });
-      const data = await res.json();
-      document.getElementById("result").textContent = "Short URL: " + data.short;
-    }
+  
+      const data = await response.json();
+      resultDiv.innerText = "Short URL: " + data.short_url;
+    });
   </script>
+  
 </body>
 </html>
