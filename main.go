@@ -7,32 +7,16 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"time"
-	"io/ioutil"
 )
 
-type URLMap map[string]string
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+var urlStore map[string]string
+var dataFile = "urls.json"
 
-const storageFile = "urls.json"
-
-func loadURLMap() URLMap {
-	data, err := ioutil.ReadFile(storageFile)
-	if err != nil {
-		return make(URLMap)
-	}
-	var urls URLMap
-	json.Unmarshal(data, &urls)
-	return urls
-}
-
-func saveURLMap(urls URLMap) {
-	data, _ := json.MarshalIndent(urls, "", "  ")
-	ioutil.WriteFile(storageFile, data, 0644)
-}
-
-func generateShortCode(n int) string {
+func generateShortLink(n int) string {
 	rand.Seed(time.Now().UnixNano())
-	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 	b := make([]rune, n)
 	for i := range b {
 		b[i] = letters[rand.Intn(len(letters))]
@@ -40,56 +24,103 @@ func generateShortCode(n int) string {
 	return string(b)
 }
 
+func loadURLs() {
+	file, err := os.Open(dataFile)
+	if err != nil {
+		urlStore = make(map[string]string)
+		return
+	}
+	defer file.Close()
+
+	err = json.NewDecoder(file).Decode(&urlStore)
+	if err != nil {
+		urlStore = make(map[string]string)
+	}
+}
+
+func saveURLs() {
+	file, err := os.Create(dataFile)
+	if err != nil {
+		log.Println("Error saving URLs:", err)
+		return
+	}
+	defer file.Close()
+
+	json.NewEncoder(file).Encode(urlStore)
+}
+
 func shortenHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var body struct {
+	type Request struct {
 		URL string `json:"url"`
 	}
+	type Response struct {
+		ShortURL string `json:"short_url"`
+	}
 
-	err := json.NewDecoder(r.Body).Decode(&body)
-	if err != nil || body.URL == "" {
-		http.Error(w, "Invalid body", http.StatusBadRequest)
+	var req Request
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil || req.URL == "" {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	urls := loadURLMap()
-	code := generateShortCode(6)
-	urls[code] = body.URL
-	saveURLMap(urls)
+	shortCode := generateShortLink(6)
+	urlStore[shortCode] = req.URL
+	saveURLs()
 
-	resp := map[string]string{"short_url": fmt.Sprintf("https://%s/%s", r.Host, code)}
+	resp := Response{
+		ShortURL: fmt.Sprintf("https://%s/%s", r.Host, shortCode),
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
 
 func redirectHandler(w http.ResponseWriter, r *http.Request) {
-	code := r.URL.Path[1:]
-	if code == "" {
-		http.ServeFile(w, r, "./frontend/index.html")
-		return
-	}
-	urls := loadURLMap()
-	longURL, ok := urls[code]
-	if !ok {
+	code := strings.TrimPrefix(r.URL.Path, "/")
+	if originalURL, ok := urlStore[code]; ok {
+		http.Redirect(w, r, originalURL, http.StatusFound)
+	} else {
 		http.NotFound(w, r)
-		return
 	}
-	http.Redirect(w, r, longURL, http.StatusFound)
+}
+
+func enableCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" && strings.HasPrefix(origin, "chrome-extension://") {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func main() {
-	http.HandleFunc("/", redirectHandler)
-	http.HandleFunc("/shorten", shortenHandler)
+	loadURLs()
+
+	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer(http.Dir("./frontend")))
+	mux.HandleFunc("/shorten", shortenHandler)
+	mux.HandleFunc("/", redirectHandler)
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	fmt.Println("Server running on port " + port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	fmt.Println("Server running at http://localhost:" + port)
+	log.Fatal(http.ListenAndServe(":"+port, enableCORS(mux)))
 }
