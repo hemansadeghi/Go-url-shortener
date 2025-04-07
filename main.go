@@ -64,4 +64,6 @@ func main() {
 		port = "8080"
 	}
 
-	fmt.Println
+	fmt.Println("Server running at http://localhost:" + port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
+}
